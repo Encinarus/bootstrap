@@ -127,14 +127,9 @@
                     (being-x (car objects)) (being-y (car objects)) (being-size (car objects)))
           (any-collide? collide? player (cdr objects)))))
 
-(define (wrap-collide collide?)
-  (if (= (procedure-arity collide?) 4)
-      (lambda (px py psize cx cy csize)
-        (collide? px py cx cy))
-      collide?))
-
 (define (window title objects targets player background
-                collide? update-player update-object update-target)
+                collide? update-player update-object update-target
+                )
   (let* ((world (make-world (convert-entities objects (+ 600 (object-spacing)))
                             (convert-entities targets (+ 600 (object-spacing)))
                             (make-being player (make-coord 320 300))
@@ -171,9 +166,16 @@
 ; Returns the same number, basically a placeholder
 (define (no-move ord dir) ord)
 
-; wrap-updateplayer : function(Number Number String) function(Number Number String) -> function(Number Number String)
-; Wraps the update-player-x and update-player-y in a function that handles both, may be easier for the kids
-(define (wrap-updateplayer update-player-x update-player-y)
+; Wraps the collide function, detecting if it's a new or old style function
+(define (wrap-collide collide?)
+  (if (= (procedure-arity collide?) 4)
+      (lambda (px py psize cx cy csize)
+        (collide? px py cx cy))
+      collide?))
+
+; simple-updateplayer : function(Number Number String) function(Number Number String) -> function(Number Number String)
+; Wraps the update-player-x and update-player-y in a function that handles both, may be easier for the kids to write
+(define (simple-updateplayer update-player-x update-player-y)
   (lambda (x y dir)
     (cond
       [(or (string=? dir "up") (string=? dir "down"))
@@ -181,6 +183,12 @@
       [(or (string=? dir "left") (string=? dir "right"))
        (make-coord (update-player-x x dir) y)]
       [else (make-coord x y)])))
+
+; Wraps update-player if needed, converting from a simple 
+(define (wrap-updateplayer update-player)
+  (if (= (procedure-arity update-player) 2)
+      (simple-updateplayer no-move update-player)
+      update-player))
 
 (define (wrap-updater updater)
   (if (> 1 (procedure-arity updater))
@@ -196,35 +204,55 @@
           (make-entity player 20)
           background
           collide?
-          (wrap-updateplayer no-move update-player-y)
+          (wrap-updateplayer update-player-y)
           (wrap-updater update-object)
           (wrap-updater update-target)))
 
-; Student functions
+; New Student functions
+;   By using the wrapper functions they can mix and match what advanced features they want
+;   They would start with the basic functions in the game and build to these features
+;   It's unlikely that they'll get to implement all of the advanced features but these
+;   seem like a good start for them. We offered them the chance to make a more advanced
+;   game if they had time at the end.
+
+(define objects (make-objects (make-entity (circle 20 "solid" "green") 20) (make-entity (circle 20 "solid" "purple") 20)))
+(define targets (make-targets (make-entity (triangle 30 "solid" "red") 15) (make-entity (triangle 30 "solid" "blue") 15)))
+(define player (make-entity (rectangle 30 30 "solid" "gray") (/ (sqrt 1800) 2)))
+(define backdrop (rectangle 640 480 "solid" "black"))
+(define ammo (ellipse 10 20 "solid" "orange"))
+
 (define (update-bullet x y type)
   (cond
     [(string=? type "fast")
      (make-coord (+ x 10) y)]
     [(string=? type "slow")
      (make-coord (+ x 5) y)]
+    [(string=? type "normal")
+     (make-coord (+ x 7) y)]
+    [(string=? type "up")
+     (make-coord (+ x 7) (- y 2))]
+    [(string=? type "down")
+     (make-coord (+ x 7) (+ y 2))]
     ))
-
-(define ammo (ellipse 10 20 "solid" "orange"))
 
 (define (shoot x y button)
   (cond
     [(string=? button "a")
-     (make-bullet ammo x y "slow")]
+     (make-bullet ammo (+ x 5) y "slow")]
     [(string=? button "s")
-     (make-bullet ammo x y "fast")]
-    [else (make-bullet ammo 10000 10000 "none")]))
+     (make-bullet ammo (+ x 5) y "fast")]
+    [(string=? button "w")
+     (make-bullet ammo (+ x 5) (- y 2) "up")]
+    [(string=? button "x")
+     (make-bullet ammo (+ x 5) (+ y 2) "down")]
+    [else (make-bullet ammo -1 -1 "none")]))
 
 (define (update-player x y dir)
   (cond
-    [(string=? dir "up") (make-coord x (- y 10))]
-    [(string=? dir "down") (make-coord x (+ y 10))]
-    [(string=? dir "left") (make-coord (- x 10) y)]
-    [(string=? dir "right") (make-coord (+ x 10) y)]
+    [(string=? dir "up") (make-coord x (- y 20))]
+    [(string=? dir "down") (make-coord x (+ y 20))]
+    [(string=? dir "left") (make-coord (- x 20) y)]
+    [(string=? dir "right") (make-coord (+ x 20) y)]
     [else (make-coord x y)]))
 
 (define (update-player2 x y dir)
@@ -247,15 +275,8 @@
     [(string=? dir "right") (+ x 20)]
     [else x]))
 
-(define (distance px py cx cy)
-  (sqrt (+ (expt (- px cx) 2)
-           (expt (- py cy) 2))))
-
 (define (collide? px py psize cx cy csize)
   (> (+ psize csize) (distance px py cx cy)))
-
-(define (old-collide? px py cx cy)
-  (> 100 (distance px py cx cy)))
 
 ; update-target : Number Number -> Coord
 ; Moves the target left in a saw tooth wave... sine wave next?
@@ -270,16 +291,22 @@
 (define (update-object x y)
   (make-coord (- x 25) y))
 
+;(window "Student Game" objects targets player backdrop collide? update-player update-object update-target)
+
+; Old student functions
+; These functions are what the students are expected to write for the basic game
+
 ; offscreen? : Number Number -> Boolean
 ; Determines if the object is off the screen, ignores right (starting) edge
 (define (offscreen? x y)
   (or (< x 0) (< y 0) (> y 480)))
 
-(define objects (make-objects (make-entity (circle 20 "solid" "green") 20) (make-entity (circle 20 "solid" "purple") 20)))
-(define targets (make-targets (make-entity (triangle 30 "solid" "red") 15) (make-entity (triangle 30 "solid" "blue") 15)))
-(define player (make-entity (rectangle 30 30 "solid" "gray") (/ (sqrt 1800) 2)))
-(define backdrop (rectangle 640 480 "solid" "black"))
+(define (old-collide? px py cx cy)
+  (> 100 (distance px py cx cy)))
 
+(define (distance px py cx cy)
+  (sqrt (+ (expt (- px cx) 2)
+           (expt (- py cy) 2))))
 
 (define (old-update-target x)
   (- x 50))
@@ -287,5 +314,10 @@
 (define (old-update-object x)
   (- x 30))
 
-;(window "Student Game" objects targets player backdrop collide? update-player update-object update-target)
-(start "Student Game" backdrop old-update-target update-player old-update-object collide? (triangle 30 "solid" "red") (rectangle 30 30 "solid" "gray") (circle 20 "solid" "green") offscreen?)
+(define (old-update-player y dir)
+  (cond
+    [(string=? dir "up") (- y 20)]
+    [(string=? dir "down") (+ y 20)]
+    [else y]))
+
+(start "Student Game" backdrop old-update-target old-update-player old-update-object collide? (triangle 30 "solid" "red") (rectangle 30 30 "solid" "gray") (circle 20 "solid" "green") offscreen?)
