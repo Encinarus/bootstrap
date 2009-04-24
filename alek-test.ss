@@ -280,12 +280,16 @@
 (define player (make-entity (rectangle 30 30 "solid" "gray") (/ (sqrt 1800) 2)))
 (define backdrop (rectangle 640 480 "solid" "black"))
 
-
 (define (old-update-target x)
   (- x 50))
 
 (define (old-update-object x)
   (- x 30))
+
+; The below two lines show the difference between using the old version (start...)
+; and using the new version (window...). Now start is just a wrapper for window,
+; you can take a look in that function to see how they would wrap their functions
+; if they wanted to use some but not all of the advanced features of the framework.
 
 ;(window "Student Game" objects targets player backdrop collide? update-player update-object update-target)
 (start "Student Game" backdrop old-update-target update-player old-update-object collide? (triangle 30 "solid" "red") (rectangle 30 30 "solid" "gray") (circle 20 "solid" "green") offscreen?)
