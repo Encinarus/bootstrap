@@ -13,6 +13,7 @@
 (define-struct coord [x y])
 
 ; An Entity is a (make-entity Image Number)
+; Broken out as a separate type so the kids can use that rather than the more complicated Being
 (define-struct entity [image size])
 
 ; A Bullet is a (make-bullet Image Number Number String)
@@ -126,8 +127,14 @@
                     (being-x (car objects)) (being-y (car objects)) (being-size (car objects)))
           (any-collide? collide? player (cdr objects)))))
 
+(define (wrap-collide collide?)
+  (if (= (procedure-arity collide?) 4)
+      (lambda (px py psize cx cy csize)
+        (collide? px py cx cy))
+      collide?))
+
 (define (window title objects targets player background
-                collide?)
+                collide? update-player update-object update-target)
   (let* ((world (make-world (convert-entities objects (+ 600 (object-spacing)))
                             (convert-entities targets (+ 600 (object-spacing)))
                             (make-being player (make-coord 320 300))
@@ -135,6 +142,7 @@
                             100
                             title
                             0))
+         (collide* (wrap-collide collide?))
          (keypress* (lambda (w k) (keypress w k update-player)))
          (update-world (lambda (w) 
                          (let* ((objects (move-all (world-objects w) update-object))
@@ -147,10 +155,10 @@
                            (cond
                              [(> timer 0)
                               (make-world objects targets player bg score title (- timer 11))]
-                             [(any-collide? collide? player objects)
-                              (make-world objects targets player bg (- score 50) title 165)]
-                             [(any-collide? collide? player targets)
-                              (make-world objects targets player bg (+ score 20) title 165)]
+                             [(any-collide? collide* player objects)
+                              (make-world objects targets player bg (- score 50) title 155)]
+                             [(any-collide? collide* player targets)
+                              (make-world objects targets player bg (+ score 20) title 155)]
                              [else (make-world objects targets player bg score title timer)])
                            ))))
     (begin
@@ -159,6 +167,38 @@
       (on-tick-event update-world)
       (on-key-event keypress*))))
 
+; no-move: Number String -> Number
+; Returns the same number, basically a placeholder
+(define (no-move ord dir) ord)
+
+; wrap-updateplayer : function(Number Number String) function(Number Number String) -> function(Number Number String)
+; Wraps the update-player-x and update-player-y in a function that handles both, may be easier for the kids
+(define (wrap-updateplayer update-player-x update-player-y)
+  (lambda (x y dir)
+    (cond
+      [(or (string=? dir "up") (string=? dir "down"))
+       (make-coord x (update-player-y y dir))]
+      [(or (string=? dir "left") (string=? dir "right"))
+       (make-coord (update-player-x x dir) y)]
+      [else (make-coord x y)])))
+
+(define (wrap-updater updater)
+  (if (> 1 (procedure-arity updater))
+      updater
+      (lambda (x y)
+        (make-coord (updater x) y))))
+
+; Compatibility layer for the students to still run their old games
+(define (start title background update-target update-player update-object collide? target player object off-the-edge?)
+  (window title
+          (make-objects (make-entity object 20))
+          (make-objects (make-entity target 20))
+          (make-entity player 20)
+          background
+          collide?
+          (wrap-updateplayer no-move update-player-y)
+          (wrap-updater update-object)
+          (wrap-updater update-target)))
 
 ; Student functions
 (define (update-bullet x y type)
@@ -215,7 +255,7 @@
   (> (+ psize csize) (distance px py cx cy)))
 
 (define (old-collide? px py cx cy)
-  (> 35 (distance px py cx cy)))
+  (> 100 (distance px py cx cy)))
 
 ; update-target : Number Number -> Coord
 ; Moves the target left in a saw tooth wave... sine wave next?
@@ -238,4 +278,14 @@
 (define objects (make-objects (make-entity (circle 20 "solid" "green") 20) (make-entity (circle 20 "solid" "purple") 20)))
 (define targets (make-targets (make-entity (triangle 30 "solid" "red") 15) (make-entity (triangle 30 "solid" "blue") 15)))
 (define player (make-entity (rectangle 30 30 "solid" "gray") (/ (sqrt 1800) 2)))
-(window "Student Game" objects targets player (rectangle 640 480 "solid" "black") collide?)
+(define backdrop (rectangle 640 480 "solid" "black"))
+
+
+(define (old-update-target x)
+  (- x 50))
+
+(define (old-update-object x)
+  (- x 30))
+
+;(window "Student Game" objects targets player backdrop collide? update-player update-object update-target)
+(start "Student Game" backdrop old-update-target update-player old-update-object collide? (triangle 30 "solid" "red") (rectangle 30 30 "solid" "gray") (circle 20 "solid" "green") offscreen?)
