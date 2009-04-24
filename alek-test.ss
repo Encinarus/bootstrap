@@ -15,21 +15,17 @@
 ; An Entity is a (make-entity Image Number)
 (define-struct entity [image size])
 
+; A Bullet is a (make-bullet Image Number Number String)
+(define-struct bullet [image x y type])
+
 ; A being is a (make-being Entity Coord)
 (define-struct being [entity coord])
 
 ; Utility functions for getting at the values nested in being
-(define (being-x b)
-  (coord-x (being-coord b)))
-
-(define (being-y b)
-  (coord-y (being-coord b)))
-
-(define (being-image b)
-  (entity-image (being-entity b)))
-
-(define (being-size b)
-  (entity-size (being-entity b)))
+(define being-x (compose coord-x being-coord))
+(define being-y (compose coord-y being-coord))
+(define being-image (compose entity-image being-entity))
+(define being-size (compose entity-size being-entity))
 
 ; A World is a (make-world Being* Being* Being Image Integer)
 (define-struct world [objects targets player background score title timer])
@@ -130,7 +126,8 @@
                     (being-x (car objects)) (being-y (car objects)) (being-size (car objects)))
           (any-collide? collide? player (cdr objects)))))
 
-(define (window title objects targets player background)
+(define (window title objects targets player background
+                collide?)
   (let* ((world (make-world (convert-entities objects (+ 600 (object-spacing)))
                             (convert-entities targets (+ 600 (object-spacing)))
                             (make-being player (make-coord 320 300))
@@ -164,6 +161,24 @@
 
 
 ; Student functions
+(define (update-bullet x y type)
+  (cond
+    [(string=? type "fast")
+     (make-coord (+ x 10) y)]
+    [(string=? type "slow")
+     (make-coord (+ x 5) y)]
+    ))
+
+(define ammo (ellipse 10 20 "solid" "orange"))
+
+(define (shoot x y button)
+  (cond
+    [(string=? button "a")
+     (make-bullet ammo x y "slow")]
+    [(string=? button "s")
+     (make-bullet ammo x y "fast")]
+    [else (make-bullet ammo 10000 10000 "none")]))
+
 (define (update-player x y dir)
   (cond
     [(string=? dir "up") (make-coord x (- y 10))]
@@ -223,4 +238,4 @@
 (define objects (make-objects (make-entity (circle 20 "solid" "green") 20) (make-entity (circle 20 "solid" "purple") 20)))
 (define targets (make-targets (make-entity (triangle 30 "solid" "red") 15) (make-entity (triangle 30 "solid" "blue") 15)))
 (define player (make-entity (rectangle 30 30 "solid" "gray") (/ (sqrt 1800) 2)))
-(window "Student Game" objects targets player (rectangle 640 480 "solid" "black"))
+(window "Student Game" objects targets player (rectangle 640 480 "solid" "black") collide?)
