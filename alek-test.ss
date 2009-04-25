@@ -320,4 +320,8 @@
     [(string=? dir "down") (+ y 20)]
     [else y]))
 
+; The below two lines show the difference between using the old version (start...)
+; and using the new version (window...). Now start is just a wrapper for window,
+; you can take a look in that function to see how they would wrap their functions
+; if they wanted to use some but not all of the advanced features of the framework.
 (start "Student Game" backdrop old-update-target old-update-player old-update-object collide? (triangle 30 "solid" "red") (rectangle 30 30 "solid" "gray") (circle 20 "solid" "green") offscreen?)
