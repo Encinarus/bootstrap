@@ -37,15 +37,10 @@
 (define make-objects list)
 
 (define (draw-being being background)
-  (let* ((image (entity-image (being-entity being)))
-         (x (coord-x (being-coord being)))
-         (y (coord-y (being-coord being))))
-    (place-image image x y background)))
+    (place-image (being-image being) (being-x being) (being-y being) background))
 
 (define (draw-all beings background)
-    (if (empty? beings)
-        background
-        (draw-being (car beings) (draw-all (cdr beings) background))))
+    (foldl draw-being background beings))
 
 ; draw-world : Image (list being*) (list being*) being -> Image
 (define (draw-world bg objects targets player title score)
@@ -121,11 +116,9 @@
 ; any-collide? : Being (list Being) -> Boolean
 ; Returns true if any of the objects collide with the being
 (define (any-collide? collide? player objects)
-  (if (empty? objects)
-      false
-      (or (collide? (being-x player) (being-y player) (being-size player)
-                    (being-x (car objects)) (being-y (car objects)) (being-size (car objects)))
-          (any-collide? collide? player (cdr objects)))))
+ (foldl (lambda (obj bool) (or (collide? (being-coord player) (being-coord obj)) bool))
+         false
+         objects))
 
 (define (window title objects targets player background
                 collide? update-player update-object update-target
