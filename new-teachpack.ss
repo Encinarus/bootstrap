@@ -196,7 +196,7 @@
                                (move-bullet bullet offscreen? update-bullet))))
          (update-world (lambda (w) 
                          (let* ((bullet (update-bullet* (world-bullet w)))
-                                (objects (remove-collisions collide? bullet
+                                (objects (remove-collisions collide* bullet
                                                             (move-all (world-objects w) update-object* offscreen?)))
                                 (targets (move-all (world-targets w) update-target* offscreen?))
                                 (score (world-score w))
