@@ -29,7 +29,7 @@
 (define being-size (compose entity-size being-entity))
 
 ; A World is a (make-world Being* Being* Being Image Integer)
-(define-struct world [objects targets player background score title timer])
+(define-struct world [objects targets player background score title timer bullet])
 
 ; make-targets and make-objects are really the same as calling list
 ; just to simplify for the kids
@@ -48,11 +48,12 @@
         (draw-being (car beings) (draw-all (cdr beings) background))))
 
 ; draw-world : Image (list being*) (list being*) being -> Image
-(define (draw-world bg objects targets player title score)
+(define (draw-world bg objects targets player title score bullet)
   (let* ((score-string (string-append title "    score:" (number->string score)))
          (target-layer (draw-all targets bg))
          (object-layer (draw-all objects target-layer))
-         (player-layer (draw-being player object-layer)))
+         (bullet-layer (place-image (bullet-image bullet) (bullet-x bullet) (bullet-y bullet) object-layer))
+         (player-layer (draw-being player bullet-layer)))
     (place-image (text score-string 20 "white") 10 0 player-layer)))
 
 (define (stub-player player timer)
@@ -70,14 +71,15 @@
                 (world-targets w)
                 player
                 (world-title w)
-                (world-score w))))
+                (world-score w)
+                (world-bullet w))))
   
 (define (bg image) (put-pinhole image 0 0))
 
 (define (random-object objects)
   (car objects))
 
-(define (move-all beings update-function)
+(define (move-all beings update-function offscreen?)
   (let* ((update-being* (lambda (o) (let* ((loc (update-function (being-x o) (being-y o)))
                                            (ent (being-entity o)))
                                       (if (offscreen? (coord-x loc) (coord-y loc))
@@ -101,7 +103,8 @@
               (world-background w)
               (world-score w)
               (world-title w)
-              (world-timer w)))
+              (world-timer w)
+              (world-bullet w)))
 
 ;; char->string : char -> String
 (define (char->string c)
@@ -109,14 +112,26 @@
         [(eq? c #\space) "space"]
         [else (string c)]))
 
-(define (keypress w key update-player)
-  (cond
-    [(symbol? key) (keypress w (symbol->string key) update-player)]
-    [(char? key)   (keypress w (char->string key)   update-player)]
-    [(not (string? key)) w]
-    [(or (string=? key "up") (string=? key "down") (string=? key "left") (string=? key "right"))
-     (move-player w (update-player (being-x (world-player w)) (being-y (world-player w)) key))]
-    [else w]))
+(define (keypress w key update-player shoot offscreen?)
+  (let* ((player (world-player w))
+         (bullet (world-bullet w)))
+    (cond
+      [(symbol? key) (keypress w (symbol->string key) update-player shoot offscreen?)]
+      [(char? key)   
+       (if (offscreen? (bullet-x bullet) (bullet-y bullet))
+           (make-world (world-objects w)
+                       (world-targets w)
+                       (world-player w)
+                       (world-background w)
+                       (world-score w)
+                       (world-title w)
+                       (world-timer w)
+                       (shoot (being-x player) (being-y player) (char->string key)))
+           w)]
+      [(not (string? key)) w]
+      [(or (string=? key "up") (string=? key "down") (string=? key "left") (string=? key "right"))
+       (move-player w (update-player (being-x (world-player w)) (being-y (world-player w)) key))]
+      [else w])))
 
 ; any-collide? : Being (list Being) -> Boolean
 ; Returns true if any of the objects collide with the being
@@ -127,21 +142,48 @@
                     (being-x (car objects)) (being-y (car objects)) (being-size (car objects)))
           (any-collide? collide? player (cdr objects)))))
 
+; Hide the objects on collision by moving them way off the screen
+(define (remove-collisions collide? bullet objects)
+  (let* ((move-on-hit (lambda (obj) (if (collide? (bullet-x bullet) (bullet-y bullet) 10
+                                                  (being-x obj) (being-y obj) (being-size obj))
+                                        (make-being (being-entity obj) (make-coord -1000 0))
+                                        obj))))
+    (map move-on-hit objects)))
+
+(define no-bullet (make-bullet (circle 1 "solid" "black") -1000 -1000 "none"))
+
+(define (move-bullet bullet offscreen? update-bullet)
+  (let* ((pos (update-bullet (bullet-x bullet)
+                             (bullet-y bullet)
+                             (bullet-type bullet))))
+    (if (offscreen? (bullet-x bullet) (bullet-y bullet))
+        no-bullet
+        (make-bullet (bullet-image bullet)
+                     (coord-x pos)
+                     (coord-y pos)
+                     (bullet-type bullet)))))
+
 (define (window title objects targets player background
-                collide? update-player update-object update-target
-                )
+                collide? update-player update-object update-target offscreen? update-bullet shoot)
   (let* ((world (make-world (convert-entities objects (+ 600 (object-spacing)))
                             (convert-entities targets (+ 600 (object-spacing)))
                             (make-being player (make-coord 320 300))
                             (bg background)
                             100
                             title
-                            0))
+                            0
+                            no-bullet))
          (collide* (wrap-collide collide?))
-         (keypress* (lambda (w k) (keypress w k update-player)))
+         (keypress* (lambda (w k) (keypress w k update-player shoot offscreen?)))
+         (update-bullet* (lambda (bullet)
+                           (if (= (bullet-x bullet) (bullet-x no-bullet))
+                               no-bullet
+                               (move-bullet bullet offscreen? update-bullet))))
          (update-world (lambda (w) 
-                         (let* ((objects (move-all (world-objects w) update-object))
-                                (targets (move-all (world-targets w) update-target))
+                         (let* ((bullet (update-bullet* (world-bullet w)))
+                                (objects (remove-collisions collide? bullet
+                                                            (move-all (world-objects w) update-object offscreen?)))
+                                (targets (move-all (world-targets w) update-target offscreen?))
                                 (score (world-score w))
                                 (player (world-player w))
                                 (bg (world-background w))
@@ -149,12 +191,12 @@
                                 (timer (world-timer w)))
                            (cond
                              [(> timer 0)
-                              (make-world objects targets player bg score title (- timer 11))]
+                              (make-world objects targets player bg score title (- timer 11) bullet)]
                              [(any-collide? collide* player objects)
-                              (make-world objects targets player bg (- score 50) title 155)]
+                              (make-world objects targets player bg (- score 50) title 155 bullet)]
                              [(any-collide? collide* player targets)
-                              (make-world objects targets player bg (+ score 20) title 155)]
-                             [else (make-world objects targets player bg score title timer)])
+                              (make-world objects targets player bg (+ score 20) title 155 bullet)]
+                             [else (make-world objects targets player bg score title timer bullet)])
                            ))))
     (begin
       (big-bang 640 480 .1 world true)
@@ -165,6 +207,15 @@
 ; no-move: Number String -> Number
 ; Returns the same number, basically a placeholder
 (define (no-move ord dir) ord)
+
+; no-bullet: Number Number String -> Coord
+; Returns the same coordinate, basically doesn't update
+(define (no-bullet-update x y type)
+  (make-coord x y))
+
+; no-shoot: Number Number String -> Bullet
+; Returns a bullet that is off the screen.
+(define (no-shoot x y key) no-bullet)
 
 ; Wraps the collide function, detecting if it's a new or old style function
 (define (wrap-collide collide?)
@@ -197,7 +248,7 @@
         (make-coord (updater x) y))))
 
 ; Compatibility layer for the students to still run their old games
-(define (start title background update-target update-player update-object collide? target player object off-the-edge?)
+(define (start title background update-target update-player update-object collide? target player object offscreen?)
   (window title
           (make-objects (make-entity object 20))
           (make-objects (make-entity target 20))
@@ -206,7 +257,10 @@
           collide?
           (wrap-updateplayer update-player-y)
           (wrap-updater update-object)
-          (wrap-updater update-target)))
+          (wrap-updater update-target)
+          offscreen?
+          no-bullet
+          no-shoot))
 
 ; New Student functions
 ;   By using the wrapper functions they can mix and match what advanced features they want
@@ -219,20 +273,20 @@
 (define targets (make-targets (make-entity (triangle 30 "solid" "red") 15) (make-entity (triangle 30 "solid" "blue") 15)))
 (define player (make-entity (rectangle 30 30 "solid" "gray") (/ (sqrt 1800) 2)))
 (define backdrop (rectangle 640 480 "solid" "black"))
-(define ammo (ellipse 10 20 "solid" "orange"))
+(define ammo (circle 10 "solid" "orange"))
 
 (define (update-bullet x y type)
   (cond
     [(string=? type "fast")
-     (make-coord (+ x 10) y)]
+     (make-coord (+ x 45) y)]
     [(string=? type "slow")
      (make-coord (+ x 5) y)]
     [(string=? type "normal")
-     (make-coord (+ x 7) y)]
+     (make-coord (+ x 30) y)]
     [(string=? type "up")
-     (make-coord (+ x 7) (- y 2))]
+     (make-coord (+ x 30) (- y 20))]
     [(string=? type "down")
-     (make-coord (+ x 7) (+ y 2))]
+     (make-coord (+ x 30) (+ y 20))]
     ))
 
 (define (shoot x y button)
@@ -245,7 +299,7 @@
      (make-bullet ammo (+ x 5) (- y 2) "up")]
     [(string=? button "x")
      (make-bullet ammo (+ x 5) (+ y 2) "down")]
-    [else (make-bullet ammo -1 -1 "none")]))
+    [else no-bullet]))
 
 (define (update-player x y dir)
   (cond
@@ -291,7 +345,6 @@
 (define (update-object x y)
   (make-coord (- x 25) y))
 
-;(window "Student Game" objects targets player backdrop collide? update-player update-object update-target)
 
 ; Old student functions
 ; These functions are what the students are expected to write for the basic game
@@ -299,7 +352,7 @@
 ; offscreen? : Number Number -> Boolean
 ; Determines if the object is off the screen, ignores right (starting) edge
 (define (offscreen? x y)
-  (or (< x 0) (< y 0) (> y 480)))
+  (or (< x 0) (< y 0) (> y 480) (> x 640)))
 
 (define (old-collide? px py cx cy)
   (> 100 (distance px py cx cy)))
@@ -324,4 +377,5 @@
 ; and using the new version (window...). Now start is just a wrapper for window,
 ; you can take a look in that function to see how they would wrap their functions
 ; if they wanted to use some but not all of the advanced features of the framework.
-(start "Student Game" backdrop old-update-target old-update-player old-update-object collide? (triangle 30 "solid" "red") (rectangle 30 30 "solid" "gray") (circle 20 "solid" "green") offscreen?)
+;(start "Student Game" backdrop old-update-target old-update-player old-update-object collide? (triangle 30 "solid" "red") (rectangle 30 30 "solid" "gray") (circle 20 "solid" "green") offscreen?)
+(window "Student Game" objects targets player backdrop collide? update-player update-object update-target offscreen? update-bullet shoot)
