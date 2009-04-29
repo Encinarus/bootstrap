@@ -185,8 +185,11 @@
                             title
                             0
                             no-bullet))
+         (update-target* (wrap-updater update-target))
+         (update-player* (wrap-updateplayer update-player))
+         (update-object* (wrap-updater update-object))
          (collide* (wrap-collide collide?))
-         (keypress* (lambda (w k) (keypress w k update-player shoot offscreen?)))
+         (keypress* (lambda (w k) (keypress w k update-player* shoot offscreen?)))
          (update-bullet* (lambda (bullet)
                            (if (= (bullet-x bullet) (bullet-x no-bullet))
                                no-bullet
@@ -194,8 +197,8 @@
          (update-world (lambda (w) 
                          (let* ((bullet (update-bullet* (world-bullet w)))
                                 (objects (remove-collisions collide? bullet
-                                                            (move-all (world-objects w) update-object offscreen?)))
-                                (targets (move-all (world-targets w) update-target offscreen?))
+                                                            (move-all (world-objects w) update-object* offscreen?)))
+                                (targets (move-all (world-targets w) update-target* offscreen?))
                                 (score (world-score w))
                                 (player (world-player w))
                                 (bg (world-background w))
@@ -256,7 +259,7 @@
       update-player))
 
 (define (wrap-updater updater)
-  (if (> 1 (procedure-arity updater))
+  (if (= (procedure-arity updater) 2)
       updater
       (lambda (x y)
         (make-coord (updater x) y))))
@@ -265,9 +268,9 @@
 (define (wrap-window title background update-target update-player-y update-object collide? target player object offscreen?)
   (window title
           background
-          (wrap-updater update-target)
-          (wrap-updateplayer update-player-y)
-          (wrap-updater update-object)
+          update-target
+          update-player-y
+          update-object
           collide?
           (make-objects (make-entity target 20))
           (make-entity player 20)
