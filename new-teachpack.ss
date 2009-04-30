@@ -2,8 +2,9 @@
 
 (require (lib "world.ss" "htdp")
          (lib "prim.ss" "lang")
+         (lib "image.ss" "htdp")
          lang/prim
-         htdp/world
+         lang/private/imageeq
          (except-in htdp/testing test)
          (for-syntax scheme/base))
 
@@ -49,10 +50,21 @@
 ; A World is a (make-world Being* Being* Being Image Integer)
 (define-struct world [objects targets player background score title timer bullet])
 
-; make-targets and make-objects are really the same as calling list
-; just to simplify for the kids
-(define make-targets list)
-(define make-objects list)
+; make-targets and make-objects wrap entity creation, can take either images or
+; entities to simplify for the kids -- most often they'll just pass multiple images
+; but if they want more accurate collision detection they can pass actual entities
+(define (wrap-entity ent)
+  (let* ((image->entity (lambda (i) (make-entity i 20))))
+    (cond
+      [(image? ent) (image->entity ent)]
+      [(entity? ent) ent]
+      [else (raise-type-error 'entity "Unknown type for wrapping" ent)])))
+
+(define wrap-entities
+  (lambda p (map wrap-entity p)))
+  
+(define make-targets wrap-entities)
+(define make-objects wrap-entities)
 
 (define (draw-being being background)
   (place-image (being-image being) (being-x being) (being-y being) background))
@@ -177,9 +189,10 @@
 
 (define (window title background update-target update-player update-object 
                 collide? targets player objects offscreen? update-bullet shoot)
-  (let* ((world (make-world (convert-entities objects (+ 600 (object-spacing)))
+  (let* ((player-ent (wrap-entity player))
+         (world (make-world (convert-entities objects (+ 600 (object-spacing)))
                             (convert-entities targets (+ 600 (object-spacing)))
-                            (make-being player (make-coord 320 300))
+                            (make-being player-ent (make-coord 320 300))
                             (bg background)
                             100
                             title
@@ -272,9 +285,9 @@
           update-player-y
           update-object
           collide?
-          (make-objects (make-entity target 20))
+          (make-targets target)
           (make-entity player 20)
-          (make-objects (make-entity object 20))
+          (make-objects object)
           offscreen?
           no-bullet
           no-shoot))

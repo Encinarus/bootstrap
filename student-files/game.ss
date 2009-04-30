@@ -8,12 +8,12 @@
 ;   seem like a good start for them. We offered them the chance to make a more advanced
 ;   game if they had time at the end.
 
-(define objects (make-objects (make-entity (circle 20 "solid" "green") 20)
-                              (make-entity (circle 20 "solid" "purple") 20)
-                              (make-entity (circle 20 "solid" "white") 20)
-                              (make-entity (circle 20 "solid" "brown") 20)))
+(define objects (make-objects (circle 20 "solid" "green")
+                              (circle 20 "solid" "purple")
+                              (circle 20 "solid" "white")
+                              (circle 20 "solid" "brown")))
 (define targets (make-targets (make-entity (triangle 30 "solid" "red") 15) (make-entity (triangle 30 "solid" "blue") 15)))
-(define player (make-entity (rectangle 30 30 "solid" "gray") (/ (sqrt 1800) 2)))
+(define player (rectangle 30 30 "solid" "gray"))
 (define backdrop (rectangle 640 480 "solid" "black"))
 (define ammo (circle 10 "solid" "orange"))
 
@@ -37,6 +37,8 @@
      (make-bullet ammo (+ x 5) y "slow")]
     [(string=? button "s")
      (make-bullet ammo (+ x 5) y "fast")]
+    [(string=? button "space")
+     (make-bullet ammo (+ x 5) y "normal")]
     [(string=? button "w")
      (make-bullet ammo (+ x 5) (- y 2) "up")]
     [(string=? button "x")
@@ -120,4 +122,4 @@
 ; you can take a look in that function to see how they would wrap their functions
 ; if they wanted to use some but not all of the advanced features of the framework.
 ;(start "Student Game" backdrop old-update-target old-update-player old-update-object collide? (triangle 30 "solid" "red") (rectangle 30 30 "solid" "gray") (circle 20 "solid" "green") offscreen?)
-(advanced-start "Student Game" backdrop update-target update-player update-object collide? targets player objects offscreen? update-bullet shoot)
+(advanced-start "Student Game" backdrop update-target update-player update-object collide? targets (rectangle 30 30 "solid" "gray") objects offscreen? update-bullet shoot)
